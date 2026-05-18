@@ -1,0 +1,34 @@
+{
+	"schemaVersion": 1,
+	"id": "shared_waypoint",
+	"version": "${version}",
+	"name": "Shared Waypoint",
+	"description": "Server-synchronized shared waypoints for Xaero's Minimap and World Map.",
+	"authors": ["jizhengh"],
+	"contact": {},
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"me.jizhengh.SharedWaypoint"
+		],
+		"client": [
+			"me.jizhengh.client.SharedWaypointClient"
+		]
+	},
+	"mixins": [
+		"shared-waypoint.mixins.json",
+		{
+			"config": "shared-waypoint.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*",
+		"xaerominimap": "*",
+		"xaeroworldmap": "*"
+	}
+}
