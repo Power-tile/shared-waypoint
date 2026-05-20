@@ -1,6 +1,7 @@
 package me.jizhengh.client.mixin;
 
 import me.jizhengh.client.shared.SharedWaypointClientState;
+import me.jizhengh.client.shared.SharedWaypointPermission;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import xaero.common.gui.GuiAddWaypoint;
 import xaero.common.gui.GuiWaypointSets;
 import xaero.common.gui.GuiWaypointWorlds;
+import xaero.common.gui.WaypointEditForm;
 import xaero.common.minimap.waypoints.Waypoint;
 import xaero.hud.minimap.module.MinimapSession;
 import xaero.hud.minimap.world.MinimapWorld;
@@ -34,6 +36,8 @@ public abstract class GuiAddWaypointMixin {
 	@Shadow private GuiWaypointWorlds worlds;
 	@Shadow private GuiWaypointSets sets;
 	@Shadow private ArrayList<Waypoint> waypointsEdited;
+	@Shadow private WaypointEditForm mutualForm;
+	@Shadow private ArrayList<WaypointEditForm> editForms;
 	@Shadow private int selectedWaypointIndex;
 	@Shadow private boolean adding;
 	@Shadow protected Button confirmButton;
@@ -52,8 +56,12 @@ public abstract class GuiAddWaypointMixin {
 
 	@Inject(method = {"init", "method_25426"}, at = @At("TAIL"), remap = false)
 	private void sharedwaypoint$initSharedToggle(CallbackInfo ci) {
+		boolean canManageSharedWaypoints = SharedWaypointPermission.canManageSharedWaypoints();
 		sharedwaypoint$lockedShared = sharedwaypoint$isCurrentShared();
 		sharedwaypoint$markShared = sharedwaypoint$lockedShared;
+		if (!canManageSharedWaypoints && !sharedwaypoint$lockedShared) {
+			sharedwaypoint$markShared = false;
+		}
 
 		sharedwaypoint$shareButton = Button.builder(
 			sharedwaypoint$shareText(),
@@ -61,6 +69,7 @@ public abstract class GuiAddWaypointMixin {
 				if (!sharedwaypoint$lockedShared) {
 					sharedwaypoint$markShared = !sharedwaypoint$markShared;
 					button.setMessage(sharedwaypoint$shareText());
+					sharedwaypoint$syncSharedCreationState();
 				}
 			}
 		).bounds(
@@ -69,11 +78,17 @@ public abstract class GuiAddWaypointMixin {
 			99,
 			20
 		).build();
-		sharedwaypoint$shareButton.active = !sharedwaypoint$lockedShared;
+		sharedwaypoint$shareButton.active = !sharedwaypoint$lockedShared && canManageSharedWaypoints;
+		sharedwaypoint$setButtonTooltip(
+			sharedwaypoint$shareButton,
+			!canManageSharedWaypoints && !sharedwaypoint$lockedShared ? "No permission to create shared waypoint" : null
+		);
 		sharedwaypoint$addWidgetCompat(sharedwaypoint$shareButton);
+		sharedwaypoint$syncSharedCreationState();
 
 		if (sharedwaypoint$lockedShared && confirmButton != null) {
-			confirmButton.setMessage(Component.literal("Delete Shared"));
+			confirmButton.setMessage(Component.literal(canManageSharedWaypoints ? "Delete Shared" : "Shared (No Permission)"));
+			confirmButton.active = canManageSharedWaypoints;
 			sharedwaypoint$disableEditingControls();
 		}
 	}
@@ -81,6 +96,10 @@ public abstract class GuiAddWaypointMixin {
 	@Inject(method = "lambda$init$3", at = @At("HEAD"), cancellable = true, remap = false)
 	private void sharedwaypoint$deleteInsteadOfEdit(ClientConfigManager configManager, Button button, CallbackInfo ci) {
 		if (!sharedwaypoint$lockedShared) {
+			return;
+		}
+		if (!SharedWaypointPermission.canManageSharedWaypoints()) {
+			ci.cancel();
 			return;
 		}
 
@@ -109,9 +128,10 @@ public abstract class GuiAddWaypointMixin {
 
 	@Inject(method = "lambda$init$3", at = @At("RETURN"), remap = false)
 	private void sharedwaypoint$shareAfterConfirm(ClientConfigManager configManager, Button button, CallbackInfo ci) {
-		if (sharedwaypoint$lockedShared || !sharedwaypoint$markShared) {
+		if (sharedwaypoint$lockedShared || !sharedwaypoint$markShared || !SharedWaypointPermission.canManageSharedWaypoints()) {
 			return;
 		}
+		sharedwaypoint$forceEnabledSharedState();
 		Waypoint waypoint = sharedwaypoint$currentWaypoint();
 		MinimapWorld world = sharedwaypoint$currentWorld();
 		if (waypoint == null || world == null) {
@@ -122,6 +142,11 @@ public abstract class GuiAddWaypointMixin {
 		SharedWaypointClientState.get().sendShare(
 			SharedWaypointClientState.get().toEntry(worldPath, setId, waypoint)
 		);
+	}
+
+	@Inject(method = {"updateConfirmButton", "method_56131"}, at = @At("TAIL"), remap = false, require = 0)
+	private void sharedwaypoint$keepSharedCreationEnabledLocked(CallbackInfo ci) {
+		sharedwaypoint$syncSharedCreationState();
 	}
 
 	@Unique
@@ -176,6 +201,47 @@ public abstract class GuiAddWaypointMixin {
 	}
 
 	@Unique
+	private void sharedwaypoint$syncSharedCreationState() {
+		boolean canManageSharedWaypoints = SharedWaypointPermission.canManageSharedWaypoints();
+		if (sharedwaypoint$lockedShared) {
+			if (confirmButton != null) {
+				confirmButton.setMessage(Component.literal(canManageSharedWaypoints ? "Delete Shared" : "Shared (No Permission)"));
+				confirmButton.active = canManageSharedWaypoints;
+			}
+			if (disableButton != null) {
+				disableButton.active = false;
+			}
+			return;
+		}
+		boolean lockEnabledState = sharedwaypoint$markShared;
+		if (lockEnabledState) {
+			sharedwaypoint$forceEnabledSharedState();
+		}
+		if (disableButton != null) {
+			disableButton.active = !lockEnabledState;
+		}
+	}
+
+	@Unique
+	private void sharedwaypoint$forceEnabledSharedState() {
+		Waypoint waypoint = sharedwaypoint$currentWaypoint();
+		if (waypoint != null) {
+			waypoint.setDisabled(false);
+			waypoint.setTemporary(false);
+		}
+		if (mutualForm != null) {
+			mutualForm.disabledOrTemporary = 0;
+		}
+		if (editForms != null) {
+			for (WaypointEditForm form : editForms) {
+				if (form != null) {
+					form.disabledOrTemporary = 0;
+				}
+			}
+		}
+	}
+
+	@Unique
 	private void sharedwaypoint$disableColorSelectorReflectively() {
 		try {
 			Field colorField = this.getClass().getDeclaredField("colorDD");
@@ -220,6 +286,21 @@ public abstract class GuiAddWaypointMixin {
 				}
 			} catch (ReflectiveOperationException ignored) {
 			}
+		}
+	}
+
+	@Unique
+	private void sharedwaypoint$setButtonTooltip(Button button, String text) {
+		if (button == null) {
+			return;
+		}
+		try {
+			Class<?> tooltipClass = Class.forName("net.minecraft.client.gui.components.Tooltip");
+			Method createMethod = tooltipClass.getMethod("create", Component.class);
+			Method setTooltipMethod = button.getClass().getMethod("setTooltip", tooltipClass);
+			Object tooltip = text == null ? null : createMethod.invoke(null, Component.literal(text));
+			setTooltipMethod.invoke(button, tooltip);
+		} catch (ReflectiveOperationException ignored) {
 		}
 	}
 }

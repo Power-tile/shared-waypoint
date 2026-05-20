@@ -8,6 +8,8 @@
 		"MinimapSessionInitMixin",
 		"WaypointMapOutlineMixin",
 		"WaypointWorldOutlineMixin",
+		"WorldMapWaypointDeleteBlockMixin",
+		"WorldMapWaypointDeleteOptionMixin",
 		"XaeroTextSuppressMixin",
 		"WorldMapWaypointRendererHaloMixin"
 	],

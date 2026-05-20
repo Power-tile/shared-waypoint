@@ -1,5 +1,6 @@
 package me.jizhengh;
 
+import me.jizhengh.config.SharedWaypointConfig;
 import me.jizhengh.network.SharedWaypointNetworking;
 import net.fabricmc.api.ModInitializer;
 
@@ -16,6 +17,7 @@ public class SharedWaypoint implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		SharedWaypointConfig.init();
 		SharedWaypointNetworking.init();
 		LOGGER.info("Shared Waypoint initialized.");
 	}
