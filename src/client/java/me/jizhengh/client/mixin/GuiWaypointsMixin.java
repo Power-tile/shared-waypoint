@@ -4,6 +4,7 @@ import me.jizhengh.client.shared.SharedWaypointClientState;
 import me.jizhengh.client.shared.SharedWaypointPermission;
 import me.jizhengh.client.shared.SharedWaypointSessionHolder;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +23,6 @@ import xaero.hud.minimap.waypoint.set.WaypointSet;
 import xaero.hud.minimap.world.MinimapWorld;
 
 import java.util.ArrayList;
-import java.lang.reflect.Method;
 
 @Mixin(value = GuiWaypoints.class, remap = false)
 public abstract class GuiWaypointsMixin {
@@ -140,13 +140,6 @@ public abstract class GuiWaypointsMixin {
 		if (button == null) {
 			return;
 		}
-		try {
-			Class<?> tooltipClass = Class.forName("net.minecraft.client.gui.components.Tooltip");
-			Method createMethod = tooltipClass.getMethod("create", Component.class);
-			Method setTooltipMethod = button.getClass().getMethod("setTooltip", tooltipClass);
-			Object tooltip = text == null ? null : createMethod.invoke(null, Component.literal(text));
-			setTooltipMethod.invoke(button, tooltip);
-		} catch (ReflectiveOperationException ignored) {
-		}
+		button.setTooltip(text == null ? null : Tooltip.create(Component.literal(text)));
 	}
 }

@@ -12,10 +12,11 @@ import xaero.common.misc.Misc;
 @Mixin(value = Misc.class, remap = false)
 public class XaeroTextSuppressMixin {
 	@Inject(
-		method = "drawNormalText(Lnet/minecraft/class_4587;Ljava/lang/String;FFIZLnet/minecraft/class_4597;)V",
+		method = "drawNormalText",
 		at = @At("HEAD"),
 		cancellable = true,
-		remap = false
+		remap = false,
+		require = 0
 	)
 	private static void sharedwaypoint$suppressNormalTextString(
 		PoseStack poseStack,

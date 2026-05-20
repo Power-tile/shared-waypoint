@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 public class SharedWaypointClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		SharedWaypoint.LOGGER.info("[shared-waypoint-debug] SharedWaypoint client entrypoint initialized.");
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
 			SharedWaypoint.LOGGER.info("[shared-waypoint-debug] client joined server {} and is waiting for shared waypoint sync", handler.getConnection().getRemoteAddress())
 		);

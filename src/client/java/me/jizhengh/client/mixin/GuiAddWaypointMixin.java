@@ -4,6 +4,7 @@ import me.jizhengh.client.shared.SharedWaypointClientState;
 import me.jizhengh.client.shared.SharedWaypointPermission;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -54,7 +55,7 @@ public abstract class GuiAddWaypointMixin {
 	@Unique private boolean sharedwaypoint$markShared;
 	@Unique private boolean sharedwaypoint$lockedShared;
 
-	@Inject(method = {"init", "method_25426"}, at = @At("TAIL"), remap = false)
+	@Inject(method = {"init", "method_25426"}, at = @At("TAIL"), remap = false, require = 0)
 	private void sharedwaypoint$initSharedToggle(CallbackInfo ci) {
 		boolean canManageSharedWaypoints = SharedWaypointPermission.canManageSharedWaypoints();
 		sharedwaypoint$lockedShared = sharedwaypoint$isCurrentShared();
@@ -275,16 +276,25 @@ public abstract class GuiAddWaypointMixin {
 
 	@Unique
 	private void sharedwaypoint$addWidgetCompat(Button button) {
-		// Xaero classes are not remapped consistently, so we try both mapped and intermediary method names.
+		// Xaero/Minecraft mappings vary and these widget methods are often protected, not public.
 		for (String methodName : new String[]{"addRenderableWidget", "method_37063"}) {
-			try {
-				for (Method method : this.getClass().getMethods()) {
-					if (method.getName().equals(methodName) && method.getParameterCount() == 1) {
+			for (Class<?> type = this.getClass(); type != null; type = type.getSuperclass()) {
+				for (Method method : type.getDeclaredMethods()) {
+					if (!method.getName().equals(methodName) || method.getParameterCount() != 1) {
+						continue;
+					}
+					Class<?> parameterType = method.getParameterTypes()[0];
+					if (!parameterType.isAssignableFrom(button.getClass())
+						&& !parameterType.getName().equals("net.minecraft.class_364")) {
+						continue;
+					}
+					try {
+						method.setAccessible(true);
 						method.invoke(this, button);
 						return;
+					} catch (ReflectiveOperationException ignored) {
 					}
 				}
-			} catch (ReflectiveOperationException ignored) {
 			}
 		}
 	}
@@ -294,13 +304,6 @@ public abstract class GuiAddWaypointMixin {
 		if (button == null) {
 			return;
 		}
-		try {
-			Class<?> tooltipClass = Class.forName("net.minecraft.client.gui.components.Tooltip");
-			Method createMethod = tooltipClass.getMethod("create", Component.class);
-			Method setTooltipMethod = button.getClass().getMethod("setTooltip", tooltipClass);
-			Object tooltip = text == null ? null : createMethod.invoke(null, Component.literal(text));
-			setTooltipMethod.invoke(button, tooltip);
-		} catch (ReflectiveOperationException ignored) {
-		}
+		button.setTooltip(text == null ? null : Tooltip.create(Component.literal(text)));
 	}
 }
