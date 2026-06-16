@@ -2,9 +2,14 @@ package me.jizhengh.server;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import me.jizhengh.shared.SharedWaypointEntry;
 import me.jizhengh.shared.SharedWaypointId;
+import me.jizhengh.shared.SharedWaypointRules;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -17,7 +22,10 @@ import java.nio.file.Path;
 import java.util.List;
 
 public final class SharedWaypointServerStore {
-	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final Gson GSON = new GsonBuilder()
+		.setPrettyPrinting()
+		.registerTypeAdapter(SharedWaypointEntry.class, new SharedWaypointEntryDeserializer())
+		.create();
 	private static final Type LIST_TYPE = new TypeToken<List<SharedWaypointEntry>>() {}.getType();
 
 	private SharedWaypointServerStore() {
@@ -54,7 +62,7 @@ public final class SharedWaypointServerStore {
 	public static void upsert(MinecraftServer server, SharedWaypointEntry entry) {
 		List<SharedWaypointEntry> current = new java.util.ArrayList<>(getAll(server));
 		current.removeIf(existing -> existing.id().equals(entry.id()));
-		current.add(entry);
+		current.add(normalizeEntry(entry));
 		saveAll(server, current);
 	}
 
@@ -62,5 +70,37 @@ public final class SharedWaypointServerStore {
 		List<SharedWaypointEntry> current = new java.util.ArrayList<>(getAll(server));
 		current.removeIf(existing -> existing.id().equals(id));
 		saveAll(server, current);
+	}
+
+	private static SharedWaypointEntry normalizeEntry(SharedWaypointEntry entry) {
+		int visibilityType = SharedWaypointRules.clampVisibilityType(entry.visibilityType());
+		if (visibilityType == entry.visibilityType()) {
+			return entry;
+		}
+		return new SharedWaypointEntry(
+			entry.id(),
+			entry.yIncluded(),
+			entry.rotationIncluded(),
+			entry.yaw(),
+			entry.color(),
+			visibilityType
+		);
+	}
+
+	private static final class SharedWaypointEntryDeserializer implements JsonDeserializer<SharedWaypointEntry> {
+		@Override
+		public SharedWaypointEntry deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) {
+			JsonObject object = json.getAsJsonObject();
+			return new SharedWaypointEntry(
+				context.deserialize(object.get("id"), SharedWaypointId.class),
+				object.get("yIncluded").getAsBoolean(),
+				object.get("rotationIncluded").getAsBoolean(),
+				object.get("yaw").getAsInt(),
+				object.get("color").getAsInt(),
+				SharedWaypointRules.clampVisibilityType(
+					object.has("visibilityType") ? object.get("visibilityType").getAsInt() : 0
+				)
+			);
+		}
 	}
 }

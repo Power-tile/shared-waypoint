@@ -7,7 +7,8 @@ public record SharedWaypointEntry(
 	boolean yIncluded,
 	boolean rotationIncluded,
 	int yaw,
-	int color
+	int color,
+	int visibilityType
 ) {
 	public SharedWaypointEntry {
 		Objects.requireNonNull(id, "id");

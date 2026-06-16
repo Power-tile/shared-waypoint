@@ -1,10 +1,12 @@
 package me.jizhengh.client.shared;
 
 import me.jizhengh.SharedWaypoint;
+import me.jizhengh.client.shared.SharedWaypointClientRules;
 import me.jizhengh.network.DeleteSharedWaypointC2SPayload;
 import me.jizhengh.network.ShareWaypointC2SPayload;
 import me.jizhengh.shared.SharedWaypointEntry;
 import me.jizhengh.shared.SharedWaypointId;
+import me.jizhengh.shared.SharedWaypointRules;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import xaero.common.minimap.waypoints.Waypoint;
@@ -84,7 +86,8 @@ public final class SharedWaypointClientState {
 			waypoint.isYIncluded(),
 			waypoint.isRotation(),
 			waypoint.getYaw(),
-			waypoint.getColor()
+			waypoint.getColor(),
+			SharedWaypointRules.clampVisibilityType(waypoint.getVisibilityType())
 		);
 	}
 
@@ -160,6 +163,7 @@ public final class SharedWaypointClientState {
 						waypoint.setYaw(entry.yaw());
 					}
 					waypoint.setColor(entry.color());
+					SharedWaypointClientRules.enforceOnWaypoint(waypoint, entry.visibilityType());
 					sharedWaypointInstances.add(waypoint);
 
 					try {

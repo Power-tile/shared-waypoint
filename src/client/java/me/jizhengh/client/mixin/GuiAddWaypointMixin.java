@@ -1,5 +1,6 @@
 package me.jizhengh.client.mixin;
 
+import me.jizhengh.client.shared.SharedWaypointClientRules;
 import me.jizhengh.client.shared.SharedWaypointClientState;
 import me.jizhengh.client.shared.SharedWaypointPermission;
 import net.minecraft.client.gui.components.Button;
@@ -44,6 +45,7 @@ public abstract class GuiAddWaypointMixin {
 	@Shadow protected Button confirmButton;
 	@Shadow private Button disableButton;
 	@Shadow private Button visibilityTypeButton;
+	@Shadow private Button defaultVisibilityTypeButton;
 	@Shadow private EditBox nameTextField;
 	@Shadow private EditBox xTextField;
 	@Shadow private EditBox yTextField;
@@ -54,6 +56,16 @@ public abstract class GuiAddWaypointMixin {
 	@Unique private Button sharedwaypoint$shareButton;
 	@Unique private boolean sharedwaypoint$markShared;
 	@Unique private boolean sharedwaypoint$lockedShared;
+
+	@Shadow
+	private WaypointEditForm getCurrent() {
+		throw new AssertionError();
+	}
+
+	@Shadow
+	private Component getDisableButtonText() {
+		throw new AssertionError();
+	}
 
 	@Inject(method = {"init", "method_25426"}, at = @At("TAIL"), remap = false, require = 0)
 	private void sharedwaypoint$initSharedToggle(CallbackInfo ci) {
@@ -132,7 +144,7 @@ public abstract class GuiAddWaypointMixin {
 		if (sharedwaypoint$lockedShared || !sharedwaypoint$markShared || !SharedWaypointPermission.canManageSharedWaypoints()) {
 			return;
 		}
-		sharedwaypoint$forceEnabledSharedState();
+		sharedwaypoint$enforceSharedWaypointRules();
 		Waypoint waypoint = sharedwaypoint$currentWaypoint();
 		MinimapWorld world = sharedwaypoint$currentWorld();
 		if (waypoint == null || world == null) {
@@ -143,6 +155,33 @@ public abstract class GuiAddWaypointMixin {
 		SharedWaypointClientState.get().sendShare(
 			SharedWaypointClientState.get().toEntry(worldPath, setId, waypoint)
 		);
+	}
+
+	@Inject(method = "lambda$init$11", at = @At("HEAD"), cancellable = true, remap = false, require = 0)
+	private void sharedwaypoint$restrictVisibilityCycle(Button button, CallbackInfo ci) {
+		if (!sharedwaypoint$markShared || sharedwaypoint$lockedShared) {
+			return;
+		}
+		WaypointEditForm form = getCurrent();
+		if (form == null) {
+			return;
+		}
+		form.visibilityType = SharedWaypointClientRules.cycleVisibility(form.visibilityType);
+		if (visibilityTypeButton != null) {
+			visibilityTypeButton.setMessage(form.visibilityType.getTranslation());
+		}
+		form.keepVisibilityType = false;
+		if (defaultVisibilityTypeButton != null) {
+			defaultVisibilityTypeButton.active = true;
+		}
+		ci.cancel();
+	}
+
+	@Inject(method = "lambda$init$9", at = @At("HEAD"), cancellable = true, remap = false, require = 0)
+	private void sharedwaypoint$blockDisableCycleWhenShared(Button button, CallbackInfo ci) {
+		if (sharedwaypoint$markShared && !sharedwaypoint$lockedShared) {
+			ci.cancel();
+		}
 	}
 
 	@Inject(method = {"updateConfirmButton", "method_56131"}, at = @At("TAIL"), remap = false, require = 0)
@@ -216,29 +255,31 @@ public abstract class GuiAddWaypointMixin {
 		}
 		boolean lockEnabledState = sharedwaypoint$markShared;
 		if (lockEnabledState) {
-			sharedwaypoint$forceEnabledSharedState();
+			sharedwaypoint$enforceSharedWaypointRules();
 		}
 		if (disableButton != null) {
 			disableButton.active = !lockEnabledState;
 		}
+		if (lockEnabledState && visibilityTypeButton != null) {
+			WaypointEditForm form = getCurrent();
+			if (form != null) {
+				visibilityTypeButton.setMessage(form.visibilityType.getTranslation());
+			}
+		}
 	}
 
 	@Unique
-	private void sharedwaypoint$forceEnabledSharedState() {
+	private void sharedwaypoint$enforceSharedWaypointRules() {
 		Waypoint waypoint = sharedwaypoint$currentWaypoint();
-		if (waypoint != null) {
-			waypoint.setDisabled(false);
-			waypoint.setTemporary(false);
-		}
-		if (mutualForm != null) {
-			mutualForm.disabledOrTemporary = 0;
-		}
+		SharedWaypointClientRules.enforceOnWaypoint(waypoint);
+		SharedWaypointClientRules.enforceOnForm(mutualForm);
 		if (editForms != null) {
 			for (WaypointEditForm form : editForms) {
-				if (form != null) {
-					form.disabledOrTemporary = 0;
-				}
+				SharedWaypointClientRules.enforceOnForm(form);
 			}
+		}
+		if (disableButton != null) {
+			disableButton.setMessage(getDisableButtonText());
 		}
 	}
 

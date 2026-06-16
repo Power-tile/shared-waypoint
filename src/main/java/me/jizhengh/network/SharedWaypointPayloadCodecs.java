@@ -2,6 +2,7 @@ package me.jizhengh.network;
 
 import me.jizhengh.shared.SharedWaypointEntry;
 import me.jizhengh.shared.SharedWaypointId;
+import me.jizhengh.shared.SharedWaypointRules;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ final class SharedWaypointPayloadCodecs {
 		buf.writeBoolean(entry.rotationIncluded());
 		buf.writeVarInt(entry.yaw());
 		buf.writeVarInt(entry.color());
+		buf.writeVarInt(entry.visibilityType());
 	}
 
 	static SharedWaypointEntry readEntry(RegistryFriendlyByteBuf buf) {
@@ -47,7 +49,8 @@ final class SharedWaypointPayloadCodecs {
 			buf.readBoolean(),
 			buf.readBoolean(),
 			buf.readVarInt(),
-			buf.readVarInt()
+			buf.readVarInt(),
+			SharedWaypointRules.clampVisibilityType(buf.readVarInt())
 		);
 	}
 
